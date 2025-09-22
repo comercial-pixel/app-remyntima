@@ -19,7 +19,7 @@ const dbConfig = {
   password: process.env.DB_PASSWORD,
   options: {
     encrypt: (process.env.DB_ENCRYPT || 'false') === 'true',
-    trustServerCertificate: (process.env.DB_TRUST_SERVER_CERTIFICATE || 'true') === 'true',
+    trustServerCertificate: (process.env.DB_TRUST_SERVER_CERTIFICATE || 'true') === true,
     enableArithAbort: true
   },
   pool: { max: 10, min: 0, idleTimeoutMillis: 30000 }
@@ -92,7 +92,7 @@ SELECT
     -- Quantidade de PEDIDOS únicos (sem distinção de IPE_CDI)
     COUNT(DISTINCT dados.PEDIDO_ID) AS [QTDE PEDIDOS], -- Adicionado a coluna de pedidos
 
-    -- Métricas para quando IPE_CDI é NOT NULL
+    -- Métricas para quando IPE_CDI IS NOT NULL
     COUNT(CASE WHEN dados.IPE_CDI IS NOT NULL THEN dados.IPE_COD ELSE NULL END) AS Remarcacao, -- Contagem de itens com CDI
     SUM(CASE WHEN dados.IPE_CDI IS NOT NULL THEN dados.IPE_VTL ELSE 0 END) AS Valor_Remarcacao,
     SUM(CASE WHEN dados.IPE_CDI IS NOT NULL THEN dados.IPE_VLC ELSE 0 END) AS Custo_Remarcacao,
