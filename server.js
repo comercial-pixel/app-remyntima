@@ -159,72 +159,161 @@ ORDER BY
     devolucoes_historico: `SELECT CONVERT(varchar,cad_ipe.IPE_DDV,112) as data_ref, cad_emp.EMP_NMR, SUM(cad_ipe.IPE_VTL) as valor FROM cad_ipe JOIN cad_ped ON cad_ipe.ped_cod = cad_ped.ped_cod JOIN cad_emp ON cad_ped.emp_cod = cad_emp.emp_cod WHERE cad_ped.PED_STA IN('CON','ACE','DEV','PND','ESP','SPC') and cad_ipe.IPE_DDV >= DATEADD(day, -30, GETDATE()) and cad_ipe.IPE_DDV <= GETDATE() and cad_ped.PED_TIP = 11 GROUP BY CONVERT(varchar,cad_ipe.IPE_DDV,112), cad_emp.EMP_NMR`
 };
 
+// Função auxiliar para formatar CPF (remove caracteres especiais e valida)
+function formatCPF(cpf) {
+  if (!cpf) return null;
+  
+  // Remove tudo que não é dígito
+  const digits = cpf.replace(/\D/g, '');
+  
+  // Valida se tem 11 dígitos
+  if (digits.length !== 11) return null;
+  
+  return digits;
+}
+
 // ---- ROTAS ----
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+
+// Rota de teste
+app.get('/test', (req, res) => {
+  res.json({ 
+    status: 'API funcionando', 
+    timestamp: new Date().toISOString(),
+    database: pool ? 'Conectado' : 'Desconectado'
+  });
 });
 
-app.post('/api/query', async (req, res) => {
-  const { queryType } = req.body;
-  console.log(`Recebida requisição para query: ${queryType}`);
-
-  const sqlQuery = queries[queryType];
-  if (!sqlQuery) {
-    console.error(`Query type inválido: ${queryType}`);
-    return res.status(400).json({ success: false, message: 'Query type inválido' });
+// Lançamentos do dia
+app.get('/api/lancamentos-diarios', async (req, res) => {
+  const currentPool = await getPool();
+  if (!currentPool) {
+    return res.status(503).json({ error: 'DB não disponível' });
   }
 
   try {
-    const p = await getPool();
-    if (!p) throw new Error('Sem conexão com o banco');
-    const result = await p.request().query(sqlQuery);
-    console.log(`Query ${queryType} executada. Registros: ${result.recordset.length}`);
-    res.json({ success: true, data: result.recordset });
+    const result = await currentPool.request().query(queries.lancamentos_diarios);
+    res.json(result.recordset);
   } catch (err) {
-    console.error('Erro na execução da query SQL:', err.message);
-    res.status(500).json({ success: false, message: 'Erro ao processar a query', error: err.message });
+    console.error('Erro em lancamentos-diarios:', err.message);
+    res.status(500).json({ error: 'Erro na consulta', details: err.message });
   }
 });
 
-// NOVO ENDPOINT: para validar CPF com sp_returnConsultaRevComissao
+// Devoluções do dia
+app.get('/api/devolucoes-diarias', async (req, res) => {
+  const currentPool = await getPool();
+  if (!currentPool) {
+    return res.status(503).json({ error: 'DB não disponível' });
+  }
+
+  try {
+    const result = await currentPool.request().query(queries.devolucoes_diarias);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Erro em devolucoes-diarias:', err.message);
+    res.status(500).json({ error: 'Erro na consulta', details: err.message });
+  }
+});
+
+// Lançamentos acumulados do mês
+app.get('/api/lancamentos-acumulados', async (req, res) => {
+  const currentPool = await getPool();
+  if (!currentPool) {
+    return res.status(503).json({ error: 'DB não disponível' });
+  }
+
+  try {
+    const result = await currentPool.request().query(queries.lancamentos_acumulados);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Erro em lancamentos-acumulados:', err.message);
+    res.status(500).json({ error: 'Erro na consulta', details: err.message });
+  }
+});
+
+// Devoluções acumuladas do mês
+app.get('/api/devolucoes-acumuladas', async (req, res) => {
+  const currentPool = await getPool();
+  if (!currentPool) {
+    return res.status(503).json({ error: 'DB não disponível' });
+  }
+
+  try {
+    const result = await currentPool.request().query(queries.devolucoes_acumuladas);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Erro em devolucoes-acumuladas:', err.message);
+    res.status(500).json({ error: 'Erro na consulta', details: err.message });
+  }
+});
+
+// NOVO ENDPOINT: Validação de CPF para login da revendedora
 app.post('/api/validate-cpf', async (req, res) => {
-  const { cpf } = req.body;
-
-  if (!cpf) {
-    return res.status(400).json({ success: false, error: 'O CPF é obrigatório.' });
+  const currentPool = await getPool();
+  if (!currentPool) {
+    return res.status(503).json({ 
+      success: false, 
+      error: 'Serviço de validação temporariamente indisponível.' 
+    });
   }
 
   try {
-    const pool = await getPool(); // Tenta pegar o pool conectado
-    if (!pool) {
-      return res.status(500).json({ success: false, error: 'Não foi possível conectar ao banco de dados.' });
+    const { cpf } = req.body;
+
+    // Validação básica do CPF
+    const cpfFormatted = formatCPF(cpf);
+    if (!cpfFormatted) {
+      return res.status(400).json({
+        success: false,
+        error: 'CPF inválido. Verifique se possui 11 dígitos.'
+      });
     }
 
-    const request = pool.request();
-    // Limpa o CPF para usar na SP (remove caracteres não numéricos)
-    // CORREÇÃO: Usando o nome completo da coluna 'cad_rev.REV_CPF'
-    const whereClause = `cad_rev.REV_CPF = '${cpf.replace(/\D/g, '')}'`; 
+    console.log(`[Validação CPF] Consultando CPF: ${cpfFormatted}`);
 
-    // O tipo e o tamanho do parâmetro devem corresponder ao que a SP espera
-    request.input('Where', sql.NVarChar(4000), whereClause); // Ajuste o tamanho (4000) se necessário
+    // CORREÇÃO: Fazer um SELECT direto na tabela cad_rev
+    const result = await currentPool.request()
+      .input('cpf', sql.VarChar(11), cpfFormatted)
+      .query('SELECT REV_COD, REV_NOM, REV_CPF, REV_EMA, REV_TEL FROM cad_rev WHERE REV_CPF = @cpf');
 
-    console.log(`[API Fenix] Executando SP 'sp_returnConsultaRevComissao' para CPF: ${cpf}`);
-    const result = await request.execute('sp_returnConsultaRevComissao');
-
+    // Verifica se encontrou algum registro
     if (result.recordset && result.recordset.length > 0) {
-      // Retorna os dados da revendedora se encontrada
-      res.json({ success: true, data: result.recordset[0] });
+      const revendedora = result.recordset[0];
+      
+      console.log(`[Validação CPF] CPF encontrado: ${revendedora.REV_NOM || 'Nome não disponível'}`);
+      
+      return res.json({
+        success: true,
+        message: 'CPF válido',
+        data: {
+          id: revendedora.REV_COD,
+          full_name: revendedora.REV_NOM, // Alterado para full_name para corresponder ao User entity do Base44
+          cpf: revendedora.REV_CPF,
+          email: revendedora.REV_EMA || null,
+          phone: revendedora.REV_TEL || null
+        }
+      });
     } else {
-      // Retorna 404 se o CPF não for encontrado
-      res.status(404).json({ success: false, error: 'CPF não encontrado ou inválido.' });
+      console.log(`[Validação CPF] CPF não encontrado: ${cpfFormatted}`);
+      
+      return res.status(404).json({
+        success: false,
+        error: 'CPF não encontrado. Verifique se você está cadastrada como revendedora.'
+      });
     }
+
   } catch (err) {
-    console.error(`[API Fenix] Erro na validação de CPF (${cpf}):`, err.message);
-    res.status(500).json({ success: false, error: 'Erro interno ao validar o CPF.', details: err.message });
+    console.error('[Validação CPF] Erro ao validar CPF:', err.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro interno ao validar o CPF.',
+      details: err.message
+    });
   }
 });
 
 // NOVO ENDPOINT: para a Stored Procedure de Análise de Revendedoras (sp_returnConsultaRevComissao)
+// Este endpoint mantém a lógica original da SP se ela for necessária em outro lugar
 app.post('/api/sp-rev-comissao', async (req, res) => {
     const { whereClause } = req.body;
 
