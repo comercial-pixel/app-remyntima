@@ -186,7 +186,44 @@ app.post('/api/query', async (req, res) => {
   }
 });
 
-// NOVO ENDPOINT: para a Stored Procedure de Análise de Revendedoras
+// NOVO ENDPOINT: para validar CPF com sp_returnConsultaRevComissao
+app.post('/api/validate-cpf', async (req, res) => {
+  const { cpf } = req.body;
+
+  if (!cpf) {
+    return res.status(400).json({ success: false, error: 'O CPF é obrigatório.' });
+  }
+
+  try {
+    const pool = await getPool(); // Tenta pegar o pool conectado
+    if (!pool) {
+      return res.status(500).json({ success: false, error: 'Não foi possível conectar ao banco de dados.' });
+    }
+
+    const request = pool.request();
+    // Limpa o CPF para usar na SP (remove caracteres não numéricos)
+    const whereClause = `REV_CPF = '${cpf.replace(/\D/g, '')}'`; 
+
+    // O tipo e o tamanho do parâmetro devem corresponder ao que a SP espera
+    request.input('Where', sql.NVarChar(4000), whereClause); // Ajuste o tamanho (4000) se necessário
+
+    console.log(`[API Fenix] Executando SP 'sp_returnConsultaRevComissao' para CPF: ${cpf}`);
+    const result = await request.execute('sp_returnConsultaRevComissao');
+
+    if (result.recordset.length > 0) {
+      // Retorna os dados da revendedora se encontrada
+      res.json({ success: true, data: result.recordset[0] });
+    } else {
+      // Retorna 404 se o CPF não for encontrado
+      res.status(404).json({ success: false, error: 'CPF não encontrado ou inválido.' });
+    }
+  } catch (err) {
+    console.error(`[API Fenix] Erro na validação de CPF (${cpf}):`, err.message);
+    res.status(500).json({ success: false, error: 'Erro interno ao validar o CPF.', details: err.message });
+  }
+});
+
+// NOVO ENDPOINT: para a Stored Procedure de Análise de Revendedoras (sp_returnConsultaRevComissao)
 app.post('/api/sp-rev-comissao', async (req, res) => {
     const { whereClause } = req.body;
 
@@ -244,7 +281,7 @@ app.post('/api/sp-cobranca-acerto', async (req, res) => {
     // IMPORTANTE: Definir os tipos corretos dos parâmetros
     request.input('EMP_COD', sql.Int, parseInt(emp_cod));
     request.input('ATRASADO', sql.Bit, atrasado ? 1 : 0);
-    request.input('RevCod', sql.Int, parseInt(revCod));
+    request.input('REV_COD', sql.Int, parseInt(revCod)); // Corrigido para REV_COD
     request.input('TIPO', sql.Int, parseInt(tipo));
     request.input('EndCompleto', sql.Bit, endCompleto ? 1 : 0);
 
