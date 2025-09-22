@@ -1,5 +1,5 @@
 {
-  "name": "fenix-api",
+  "name": "app-remyntima",
   "version": "1.0.0",
   "description": "API para dados do Fenix",
   "main": "server.js",
