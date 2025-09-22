@@ -202,7 +202,8 @@ app.post('/api/validate-cpf', async (req, res) => {
 
     const request = pool.request();
     // Limpa o CPF para usar na SP (remove caracteres não numéricos)
-    const whereClause = `REV_CPF = '${cpf.replace(/\D/g, '')}'`; 
+    // CORREÇÃO: Usando o nome completo da coluna 'cad_rev.REV_CPF'
+    const whereClause = `cad_rev.REV_CPF = '${cpf.replace(/\D/g, '')}'`; 
 
     // O tipo e o tamanho do parâmetro devem corresponder ao que a SP espera
     request.input('Where', sql.NVarChar(4000), whereClause); // Ajuste o tamanho (4000) se necessário
@@ -210,7 +211,7 @@ app.post('/api/validate-cpf', async (req, res) => {
     console.log(`[API Fenix] Executando SP 'sp_returnConsultaRevComissao' para CPF: ${cpf}`);
     const result = await request.execute('sp_returnConsultaRevComissao');
 
-    if (result.recordset.length > 0) {
+    if (result.recordset && result.recordset.length > 0) {
       // Retorna os dados da revendedora se encontrada
       res.json({ success: true, data: result.recordset[0] });
     } else {
