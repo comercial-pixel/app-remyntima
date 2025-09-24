@@ -58,6 +58,8 @@ async function getPool() {
 }
 
 // ---- QUERIES (as suas, sem alterações) ----
+// Nota: Para Stored Procedures, o SQL é executado diretamente na rota, não aqui.
+// Esta seção serve mais para queries SQL diretas e reutilizáveis.
 const queries = {
     lancamentos_diarios: `WITH CTE_Dados AS (
     -- Seleção de dados relevantes com as condições do WHERE aplicadas
@@ -242,7 +244,7 @@ app.get('/api/devolucoes-acumuladas', async (req, res) => {
     const result = await currentPool.request().query(queries.devolucoes_acumuladas);
     res.json(result.recordset);
   } catch (err) {
-    console.error('Erro em devolucoes-acumuladas:', err.message);
+error('Erro em devolucoes-acumuladas:', err.message);
     res.status(500).json({ error: 'Erro na consulta', details: err.message });
   }
 });
@@ -271,10 +273,10 @@ app.post('/api/validate-cpf', async (req, res) => {
 
     console.log(`[Validação CPF] Consultando CPF: ${cpfFormatted}`);
 
-    // CORREÇÃO: Fazer um SELECT direto na tabela cad_rev
+    // Fazer um SELECT direto na tabela cad_rev
     const result = await currentPool.request()
       .input('cpf', sql.VarChar(11), cpfFormatted)
-      .query('SELECT REV_COD, REV_NOM, REV_CPF, REV_EMA, REV_TEL FROM cad_rev WHERE REV_CPF = @cpf');
+      .query('SELECT REV_COD, REV_NOM, REV_CPF, REV_EMA, REV_TEL, REV_CEL FROM cad_rev WHERE REV_CPF = @cpf');
 
     // Verifica se encontrou algum registro
     if (result.recordset && result.recordset.length > 0) {
@@ -286,11 +288,12 @@ app.post('/api/validate-cpf', async (req, res) => {
         success: true,
         message: 'CPF válido',
         data: {
-          id: revendedora.REV_COD,
-          full_name: revendedora.REV_NOM, // Alterado para full_name para corresponder ao User entity do Base44
-          cpf: revendedora.REV_CPF,
-          email: revendedora.REV_EMA || null,
-          phone: revendedora.REV_TEL || null
+          REV_COD: revendedora.REV_COD,
+          REV_NOM: revendedora.REV_NOM, 
+          REV_CPF: revendedora.REV_CPF,
+          REV_EMA: revendedora.REV_EMA || null,
+          REV_TEL: revendedora.REV_TEL || null,
+          REV_CEL: revendedora.REV_CEL || null
         }
       });
     } else {
@@ -313,7 +316,6 @@ app.post('/api/validate-cpf', async (req, res) => {
 });
 
 // NOVO ENDPOINT: para a Stored Procedure de Análise de Revendedoras (sp_returnConsultaRevComissao)
-// Este endpoint mantém a lógica original da SP se ela for necessária em outro lugar
 app.post('/api/sp-rev-comissao', async (req, res) => {
     const { whereClause } = req.body;
 
@@ -329,8 +331,7 @@ app.post('/api/sp-rev-comissao', async (req, res) => {
         }
 
         const request = p.request();
-        // O tipo e o tamanho do parâmetro devem corresponder ao que a SP espera
-        request.input('Where', sql.NVarChar(4000), whereClause); // Ajuste o tamanho (4000) se necessário
+        request.input('Where', sql.NVarChar(4000), whereClause);
 
         console.log(`[API Render] Executando SP 'sp_returnConsultaRevComissao' com WHERE: ${whereClause}`);
         const result = await request.execute('sp_returnConsultaRevComissao');
@@ -339,7 +340,6 @@ app.post('/api/sp-rev-comissao', async (req, res) => {
 
     } catch (err) {
         console.error('[API Render] Erro ao executar SP sp_returnConsultaRevComissao:', err.message);
-        // Retorna um erro 500 se algo der errado na execução da SP ou conexão
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -368,10 +368,9 @@ app.post('/api/sp-cobranca-acerto', async (req, res) => {
 
     const request = pool.request();
     
-    // IMPORTANTE: Definir os tipos corretos dos parâmetros
     request.input('EMP_COD', sql.Int, parseInt(emp_cod));
     request.input('ATRASADO', sql.Bit, atrasado ? 1 : 0);
-    request.input('REV_COD', sql.Int, parseInt(revCod)); // Corrigido para REV_COD
+    request.input('REV_COD', sql.Int, parseInt(revCod));
     request.input('TIPO', sql.Int, parseInt(tipo));
     request.input('EndCompleto', sql.Bit, endCompleto ? 1 : 0);
 
@@ -418,10 +417,9 @@ app.post('/api/sp-analise-participacao-acerto', async (req, res) => {
 
     const request = pool.request();
     
-    // IMPORTANTE: Definir os tipos corretos dos parâmetros para a Stored Procedure
     request.input('EMP_COD', sql.Int, parseInt(emp_cod));
-    request.input('INICIO', sql.VarChar(10), inicio); // Formato YYYYMMDD
-    request.input('FIM', sql.VarChar(10), fim);     // Formato YYYYMMDD
+    request.input('INICIO', sql.VarChar(10), inicio);
+    request.input('FIM', sql.VarChar(10), fim);
     request.input('DEV_ANT', sql.Int, 0); // NOVO PARÂMETRO: @DEV_ANT com valor fixo 0
 
     const result = await request.execute('sp_returnFcsAnaliseParticipacoAcerto');
@@ -474,10 +472,6 @@ app.post('/api/sp-AnaliseParticipacaoDeProdutos', async (req, res) => {
     request.input('TP_DATA_FILTRO', sql.Int, parseInt(TP_DATA_FILTRO));
     request.input('TCT_COD', sql.Int, parseInt(TCT_COD));
     
-    // O parâmetro @Fornecedores é do tipo UDTT_cad_for.
-    // Como não estamos passando dados para ele, não o adicionamos aqui.
-    // Se a SP exigir, o banco retornará um erro específico que podemos tratar.
-    
     // Executar a stored procedure
     const result = await request.execute('sp_AnaliseParticipacaoDeProdutos');
     
@@ -497,8 +491,50 @@ app.post('/api/sp-AnaliseParticipacaoDeProdutos', async (req, res) => {
   }
 });
 
-//
-//
+// NOVO ENDPOINT: Para a Stored Procedure sp_ConsultaIpeViaRev
+app.post('/api/sp-consulta-ipe-via-rev', async (req, res) => {
+  try {
+    const { REV_COD } = req.body;
+
+    if (!REV_COD) {
+      return res.status(400).json({
+        success: false,
+        error: 'Parâmetro REV_COD é obrigatório.'
+      });
+    }
+
+    const pool = await getPool();
+    if (!pool) {
+      return res.status(500).json({
+        success: false,
+        error: 'Não foi possível conectar ao banco de dados.'
+      });
+    }
+
+    console.log(`📊 [sp-ConsultaIpeViaRev] Executando SP para REV_COD: ${REV_COD}`);
+
+    const request = pool.request();
+    request.input('REV_COD', sql.Int, parseInt(REV_COD));
+
+    const result = await request.execute('sp_ConsultaIpeViaRev');
+
+    console.log(`✅ [sp-ConsultaIpeViaRev] SP executada com sucesso. Registros: ${result.recordset.length}`);
+
+    res.json({
+      success: true,
+      data: result.recordset
+    });
+
+  } catch (error) {
+    console.error('❌ [sp-ConsultaIpeViaRev] Erro na SP:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+
 // Status do DB: hora do SQL + contagens/valores do dia (para acompanhar atualização)
 app.get('/api/db-status', async (req, res) => {
   try {
