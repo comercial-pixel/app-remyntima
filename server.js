@@ -395,47 +395,50 @@ app.post('/api/sp-cobranca-acerto', async (req, res) => {
 // NOVO ENDPOINT: para a Stored Procedure sp_returnFcsAnaliseParticipacoAcerto
 app.post('/api/sp-analise-participacao-acerto', async (req, res) => {
   try {
-    const { emp_cod, inicio, fim } = req.body;
+    // 1. Desestruturar o REV_COD do corpo da requisição
+    const { emp_cod, inicio, fim, rev_cod } = req.body; // <-- ADICIONADO rev_cod AQUI
 
-    // Validação básica dos parâmetros
-    if (!emp_cod || !inicio || !fim) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Parâmetros emp_cod, inicio e fim são obrigatórios.' 
+    // 2. Adicionar validação para o REV_COD
+    if (!emp_cod || !inicio || !fim || !rev_cod) { // <-- rev_cod ADICIONADO À VALIDAÇÃO
+      return res.status(400).json({
+        success: false,
+        error: 'Parâmetros emp_cod, inicio, fim e rev_cod são obrigatórios.' // <-- MENSAGEM ATUALIZADA
       });
     }
 
     const pool = await getPool();
     if (!pool) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Não foi possível conectar ao banco de dados.' 
+      return res.status(500).json({
+        success: false,
+        error: 'Não foi possível conectar ao banco de dados.'
       });
     }
 
-    console.log('📊 [sp-analise-participacao-acerto] Executando SP com parâmetros:', { emp_cod, inicio, fim });
+    console.log('📊 [sp-analise-participacao-acerto] Executando SP com parâmetros:', { emp_cod, inicio, fim, rev_cod }); // <-- rev_cod ADICIONADO AO LOG
 
     const request = pool.request();
-    
+
     request.input('EMP_COD', sql.Int, parseInt(emp_cod));
     request.input('INICIO', sql.VarChar(10), inicio);
     request.input('FIM', sql.VarChar(10), fim);
-    request.input('DEV_ANT', sql.Int, 0); // NOVO PARÂMETRO: @DEV_ANT com valor fixo 0
+    request.input('DEV_ANT', sql.Int, 0);
+    // 3. Adicionar o REV_COD como parâmetro para a Stored Procedure
+    request.input('REV_COD', sql.Int, parseInt(rev_cod)); // <-- LINHA CHAVE ADICIONADA AQUI
 
     const result = await request.execute('sp_returnFcsAnaliseParticipacoAcerto');
-    
+
     console.log(`✅ [sp-analise-participacao-acerto] SP executada com sucesso. Registros: ${result.recordset.length}`);
 
-    res.json({ 
-      success: true, 
-      data: result.recordset 
+    res.json({
+      success: true,
+      data: result.recordset
     });
 
   } catch (error) {
     console.error('❌ [sp-analise-participacao-acerto] Erro na SP:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
