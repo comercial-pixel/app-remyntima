@@ -395,21 +395,22 @@ app.post('/api/sp-cobranca-acerto', async (req, res) => {
 // NOVO ENDPOINT: para a Stored Procedure sp_returnFcsAnaliseParticipacoAcerto
 app.post('/api/sp-analise-participacao-acerto', async (req, res) => {
   try {
-    const { emp_cod, inicio, fim, rev_cod } = req.body;
+    // Apenas extraímos o rev_cod do corpo da requisição.
+    // emp_cod, inicio e fim serão definidos com valores fixos conforme sua necessidade.
+    const { rev_cod: incoming_rev_cod } = req.body;
 
-    // --- INÍCIO DA CORREÇÃO ---
-    // A validação agora verifica se o parâmetro não é null nem undefined.
-    // Isso permite que 0 e strings vazias '' sejam valores válidos.
-    if (emp_cod === undefined || emp_cod === null || 
-        inicio === undefined || inicio === null ||
-        fim === undefined || fim === null ||
-        rev_cod === undefined || rev_cod === null) {
+    // Valores fixos para a chamada da Stored Procedure
+    const EMP_COD_FOR_SP = 0;
+    const INICIO_FOR_SP = '';
+    const FIM_FOR_SP = '';
+
+    // Validamos apenas o rev_cod, pois os outros são fixos e garantidos.
+    if (incoming_rev_cod === undefined || incoming_rev_cod === null) {
       return res.status(400).json({
         success: false,
-        error: 'Parâmetros emp_cod, inicio, fim e rev_cod são obrigatórios.'
+        error: 'O parâmetro REV_COD é obrigatório.'
       });
     }
-    // --- FIM DA CORREÇÃO ---
 
     const pool = await getPool();
     if (!pool) {
@@ -419,16 +420,20 @@ app.post('/api/sp-analise-participacao-acerto', async (req, res) => {
       });
     }
 
-    console.log('📊 [sp-analise-participacao-acerto] Executando SP com parâmetros:', { emp_cod, inicio, fim, rev_cod });
+    console.log('📊 [sp-analise-participacao-acerto] Executando SP com parâmetros fixos:', {
+      EMP_COD: EMP_COD_FOR_SP,
+      INICIO: INICIO_FOR_SP,
+      FIM: FIM_FOR_SP,
+      REV_COD: incoming_rev_cod
+    });
 
     const request = pool.request();
 
-    // Adicionado parseInt(emp_cod || 0) e parseInt(rev_cod || 0) para lidar com possíveis null/undefined
-    request.input('EMP_COD', sql.Int, parseInt(emp_cod || '0')); 
-    request.input('INICIO', sql.VarChar(10), inicio || ''); // Passa string vazia se 'inicio' for null/undefined
-    request.input('FIM', sql.VarChar(10), fim || '');     // Passa string vazia se 'fim' for null/undefined
-    request.input('DEV_ANT', sql.Int, 0);
-    request.input('REV_COD', sql.Int, parseInt(rev_cod || '0'));
+    // Usar os valores fixos para os inputs da Stored Procedure
+    request.input('EMP_COD', sql.Int, EMP_COD_FOR_SP);
+    request.input('INICIO', sql.VarChar(10), INICIO_FOR_SP);
+    request.input('FIM', sql.VarChar(10), FIM_FOR_SP);
+    request.input('REV_COD', sql.Int, parseInt(incoming_rev_cod)); // Converte para inteiro o rev_cod recebido
 
     const result = await request.execute('sp_returnFcsAnaliseParticipacoAcerto');
 
@@ -447,6 +452,8 @@ app.post('/api/sp-analise-participacao-acerto', async (req, res) => {
     });
   }
 });
+
+
 
 // Endpoint para Análise de Participação de Produtos - ATUALIZADO
 app.post('/api/sp-AnaliseParticipacaoDeProdutos', async (req, res) => {
