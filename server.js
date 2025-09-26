@@ -244,7 +244,7 @@ app.get('/api/devolucoes-acumuladas', async (req, res) => {
     const result = await currentPool.request().query(queries.devolucoes_acumuladas);
     res.json(result.recordset);
   } catch (err) {
-error('Erro em devolucoes-acumuladas:', err.message);
+    console.error('Erro em devolucoes-acumuladas:', err.message);
     res.status(500).json({ error: 'Erro na consulta', details: err.message });
   }
 });
@@ -395,16 +395,21 @@ app.post('/api/sp-cobranca-acerto', async (req, res) => {
 // NOVO ENDPOINT: para a Stored Procedure sp_returnFcsAnaliseParticipacoAcerto
 app.post('/api/sp-analise-participacao-acerto', async (req, res) => {
   try {
-    // 1. Desestruturar o REV_COD do corpo da requisição
-    const { emp_cod, inicio, fim, rev_cod } = req.body; // <-- ADICIONADO rev_cod AQUI
+    const { emp_cod, inicio, fim, rev_cod } = req.body;
 
-    // 2. Adicionar validação para o REV_COD
-    if (!emp_cod || !inicio || !fim || !rev_cod) { // <-- rev_cod ADICIONADO À VALIDAÇÃO
+    // --- INÍCIO DA CORREÇÃO ---
+    // A validação agora verifica se o parâmetro não é null nem undefined.
+    // Isso permite que 0 e strings vazias '' sejam valores válidos.
+    if (emp_cod === undefined || emp_cod === null || 
+        inicio === undefined || inicio === null ||
+        fim === undefined || fim === null ||
+        rev_cod === undefined || rev_cod === null) {
       return res.status(400).json({
         success: false,
-        error: 'Parâmetros emp_cod, inicio, fim e rev_cod são obrigatórios.' // <-- MENSAGEM ATUALIZADA
+        error: 'Parâmetros emp_cod, inicio, fim e rev_cod são obrigatórios.'
       });
     }
+    // --- FIM DA CORREÇÃO ---
 
     const pool = await getPool();
     if (!pool) {
@@ -414,16 +419,16 @@ app.post('/api/sp-analise-participacao-acerto', async (req, res) => {
       });
     }
 
-    console.log('📊 [sp-analise-participacao-acerto] Executando SP com parâmetros:', { emp_cod, inicio, fim, rev_cod }); // <-- rev_cod ADICIONADO AO LOG
+    console.log('📊 [sp-analise-participacao-acerto] Executando SP com parâmetros:', { emp_cod, inicio, fim, rev_cod });
 
     const request = pool.request();
 
-    request.input('EMP_COD', sql.Int, parseInt(emp_cod));
-    request.input('INICIO', sql.VarChar(10), inicio);
-    request.input('FIM', sql.VarChar(10), fim);
+    // Adicionado parseInt(emp_cod || 0) e parseInt(rev_cod || 0) para lidar com possíveis null/undefined
+    request.input('EMP_COD', sql.Int, parseInt(emp_cod || '0')); 
+    request.input('INICIO', sql.VarChar(10), inicio || ''); // Passa string vazia se 'inicio' for null/undefined
+    request.input('FIM', sql.VarChar(10), fim || '');     // Passa string vazia se 'fim' for null/undefined
     request.input('DEV_ANT', sql.Int, 0);
-    // 3. Adicionar o REV_COD como parâmetro para a Stored Procedure
-    request.input('REV_COD', sql.Int, parseInt(rev_cod)); // <-- LINHA CHAVE ADICIONADA AQUI
+    request.input('REV_COD', sql.Int, parseInt(rev_cod || '0'));
 
     const result = await request.execute('sp_returnFcsAnaliseParticipacoAcerto');
 
@@ -449,7 +454,7 @@ app.post('/api/sp-AnaliseParticipacaoDeProdutos', async (req, res) => {
     const { emp_cod, inicio, fim, FUN_COD = 0, TP_ANALISE = 1, TP_DATA_FILTRO = 1, TCT_COD = 1 } = req.body;
     
     // Validar parâmetros obrigatórios
-    if (!emp_cod || !inicio || !fim) {
+    if (emp_cod === undefined || emp_cod === null || !inicio || !fim) { // Ajuste para permitir emp_cod = 0
       return res.status(400).json({ 
         success: false, 
         error: 'Parâmetros emp_cod, inicio e fim são obrigatórios' 
@@ -467,7 +472,7 @@ app.post('/api/sp-AnaliseParticipacaoDeProdutos', async (req, res) => {
     const request = pool.request();
     
     // Configurar parâmetros da stored procedure com tipos explícitos
-    request.input('EMP_COD', sql.Int, parseInt(emp_cod));
+    request.input('EMP_COD', sql.Int, parseInt(emp_cod || '0')); // Adicionado fallback para 0
     request.input('inicio', sql.VarChar(10), inicio);
     request.input('Fim', sql.VarChar(10), fim);
     request.input('FUN_COD', sql.Int, parseInt(FUN_COD));
@@ -499,7 +504,7 @@ app.post('/api/sp-consulta-ipe-via-rev', async (req, res) => {
   try {
     const { REV_COD } = req.body;
 
-    if (!REV_COD) {
+    if (REV_COD === undefined || REV_COD === null) { // Ajuste para permitir REV_COD = 0
       return res.status(400).json({
         success: false,
         error: 'Parâmetro REV_COD é obrigatório.'
@@ -517,7 +522,7 @@ app.post('/api/sp-consulta-ipe-via-rev', async (req, res) => {
     console.log(`📊 [sp-ConsultaIpeViaRev] Executando SP para REV_COD: ${REV_COD}`);
 
     const request = pool.request();
-    request.input('REV_COD', sql.Int, parseInt(REV_COD));
+    request.input('REV_COD', sql.Int, parseInt(REV_COD || '0')); // Adicionado fallback para 0
 
     const result = await request.execute('sp_ConsultaIpeViaRev');
 
