@@ -249,6 +249,7 @@ app.get('/api/devolucoes-acumuladas', async (req, res) => {
   }
 });
 
+
 // NOVO ENDPOINT: Validação de CPF para login da revendedora
 app.post('/api/validate-cpf', async (req, res) => {
   const currentPool = await getPool();
@@ -276,10 +277,12 @@ app.post('/api/validate-cpf', async (req, res) => {
     // Fazer um SELECT direto na tabela cad_rev
     const result = await currentPool.request()
       .input('cpf', sql.VarChar(11), cpfFormatted)
-      .query('SELECT cad_emp.EMP_NMR, cad_rev.REV_COD, REV_NOM, REV_CPF, REV_EMA, REV_TEL, REV_CEL FROM               cad_rev
+      .query(`SELECT cad_emp.EMP_NMR, cad_rev.REV_COD, REV_NOM, REV_CPF, REV_EMA, REV_TEL, REV_CEL 
+              FROM cad_rev
               JOIN cli_rev on cli_rev.REV_COD = cad_rev.REV_COD and cli_rev.STATUS = 1
               JOIN cad_cli on cad_cli.CLI_COD = cli_rev.CLI_COD
-              JOIN cad_emp on cad_emp.EMP_COD = cad_cli.EMP_COD WHERE REV_CPF = @cpf');
+              JOIN cad_emp on cad_emp.EMP_COD = cad_cli.EMP_COD 
+              WHERE REV_CPF = @cpf`);
 
     // Verifica se encontrou algum registro
     if (result.recordset && result.recordset.length > 0) {
@@ -297,6 +300,7 @@ app.post('/api/validate-cpf', async (req, res) => {
           REV_EMA: revendedora.REV_EMA || null,
           REV_TEL: revendedora.REV_TEL || null,
           REV_CEL: revendedora.REV_CEL || null,
+          // Linha corrigida/adicionada para incluir EMP_NMR
           EMP_NMR: revendedora.EMP_NMR || null 
         }
       });
@@ -318,6 +322,7 @@ app.post('/api/validate-cpf', async (req, res) => {
     });
   }
 });
+
 
 // NOVO ENDPOINT: para a Stored Procedure de Análise de Revendedoras (sp_returnConsultaRevComissao)
 app.post('/api/sp-rev-comissao', async (req, res) => {
