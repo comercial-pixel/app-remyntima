@@ -276,7 +276,10 @@ app.post('/api/validate-cpf', async (req, res) => {
     // Fazer um SELECT direto na tabela cad_rev
     const result = await currentPool.request()
       .input('cpf', sql.VarChar(11), cpfFormatted)
-      .query('SELECT REV_COD, REV_NOM, REV_CPF, REV_EMA, REV_TEL, REV_CEL FROM cad_rev WHERE REV_CPF = @cpf');
+      .query('SELECT cad_emp.EMP_NMR, cad_rev.REV_COD, REV_NOM, REV_CPF, REV_EMA, REV_TEL, REV_CEL FROM               cad_rev
+              JOIN cli_rev on cli_rev.REV_COD = cad_rev.REV_COD and cli_rev.STATUS = 1
+              JOIN cad_cli on cad_cli.CLI_COD = cli_rev.CLI_COD
+              JOIN cad_emp on cad_emp.EMP_COD = cad_cli.EMP_COD WHERE REV_CPF = @cpf');
 
     // Verifica se encontrou algum registro
     if (result.recordset && result.recordset.length > 0) {
@@ -293,7 +296,8 @@ app.post('/api/validate-cpf', async (req, res) => {
           REV_CPF: revendedora.REV_CPF,
           REV_EMA: revendedora.REV_EMA || null,
           REV_TEL: revendedora.REV_TEL || null,
-          REV_CEL: revendedora.REV_CEL || null
+          REV_CEL: revendedora.REV_CEL || null,
+          EMP_NMR: revendedora.EMP_NMR || null 
         }
       });
     } else {
