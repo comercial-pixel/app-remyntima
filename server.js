@@ -301,7 +301,7 @@ app.post('/api/validate-cpf', async (req, res) => {
           REV_TEL: revendedora.REV_TEL || null,
           REV_CEL: revendedora.REV_CEL || null,
           // Linha corrigida/adicionada para incluir EMP_NMR
-          EMP_NMR: revendedora.EMP_NMR || null
+          EMP_NMR: revendedora.EMP_NMR || null,
           CLI_RAZ: revendedora.CLI_RAZ || null 
         }
       });
