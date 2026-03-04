@@ -581,6 +581,53 @@ app.get('/api/db-status', async (req, res) => {
   }
 });
 
+
+// NOVO ENDPOINT: Para a Stored Procedure sp_ConsultaCadFcs
+app.post('/api/sp-consulta-cad-fcs', async (req, res) => {
+  try {
+    const { EMP_COD = 0, INI, FIM } = req.body;
+
+    if (!INI || !FIM) {
+      return res.status(400).json({
+        success: false,
+        error: 'Parâmetros INI e FIM são obrigatórios.'
+      });
+    }
+
+    const pool = await getPool();
+    if (!pool) {
+      return res.status(500).json({
+        success: false,
+        error: 'Não foi possível conectar ao banco de dados.'
+      });
+    }
+
+    console.log(`📊 [sp-consulta-cad-fcs] Executando SP com parâmetros:`, { EMP_COD, INI, FIM });
+
+    const request = pool.request();
+    request.input('EMP_COD', sql.Int, parseInt(EMP_COD || '0'));
+    request.input('INI', sql.VarChar(10), INI);
+    request.input('FIM', sql.VarChar(10), FIM);
+
+    const result = await request.execute('sp_ConsultaCadFcs');
+
+    console.log(`✅ [sp-consulta-cad-fcs] SP executada com sucesso. Registros: ${result.recordset.length}`);
+
+    res.json({
+      success: true,
+      data: result.recordset
+    });
+
+  } catch (error) {
+    console.error('❌ [sp-consulta-cad-fcs] Erro na SP:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+
 // Sobe HTTP primeiro e tenta o DB em background (não mata o processo se falhar)
 app.listen(PORT, HOST, () => {
   console.log(`🚀 API Fenix rodando em http://${HOST}:${PORT}`);
